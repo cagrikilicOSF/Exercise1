@@ -21,7 +21,7 @@ trigger ContactTrigger on Contact (before insert, before update, after insert, a
     }
     if (Trigger.isUpdate) {
         if (Trigger.isBefore) {
-            contactTriggerHandler.validatePrimaryBeforeUpdate(Trigger.new);
+            contactTriggerHandler.validatePrimaryBeforeUpdate(Trigger.new, Trigger.oldMap);
         }
         if (Trigger.isAfter) {
             contactTriggerHandler.processPrimaryAfterUpdate(Trigger.new);
