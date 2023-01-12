@@ -121,11 +121,11 @@ public without sharing class EmailToPrimaryContactBatch implements Database.Batc
                 sentEmails++;
             }
             Messaging.SendEmailResult[] results = Messaging.sendEmail(messages);
-                if (results[0].success) {
-                    System.debug('The email was sent successfully.');
-                } else {
-                    System.debug('The email failed to send: ' + results[0].errors[0].message);
-                }
+            if (results[0].success) {
+                System.debug('The email was sent successfully.');
+            } else {
+                System.debug('The email failed to send: ' + results[0].errors[0].message);
+            }
 
             AsyncApexJob job = [
                 SELECT
