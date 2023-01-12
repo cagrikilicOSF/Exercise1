@@ -77,8 +77,8 @@ public without sharing class EmailToPrimaryContactBatch implements Database.Batc
   	******************************************************************/
     public void finish(Database.BatchableContext bc) {
         try {
+            Messaging.SingleEmailMessage[] messages = new List<Messaging.SingleEmailMessage>();
             for (Contact c : primaryContacts) {
-                Messaging.SingleEmailMessage[] messages = new List<Messaging.SingleEmailMessage>();
                 Messaging.SingleEmailMessage message = new Messaging.SingleEmailMessage();
                 message.setTargetObjectId(c.Id);
                 message.setSenderDisplayName('Company Support');
@@ -119,13 +119,13 @@ public without sharing class EmailToPrimaryContactBatch implements Database.Batc
                 message.toAddresses = new List<String>{ c.Email };
                 messages.add(message);
                 sentEmails++;
-                Messaging.SendEmailResult[] results = Messaging.sendEmail(messages);
+            }
+            Messaging.SendEmailResult[] results = Messaging.sendEmail(messages);
                 if (results[0].success) {
                     System.debug('The email was sent successfully.');
                 } else {
                     System.debug('The email failed to send: ' + results[0].errors[0].message);
                 }
-            }
 
             AsyncApexJob job = [
                 SELECT
