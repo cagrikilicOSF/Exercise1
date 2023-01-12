@@ -31,11 +31,7 @@ public with sharing class ContactTriggerHandler {
                     newPrimaryContacts.add(c);
                 }
             }
-            List<Contact> oldContact = [
-                SELECT Id, Name, Is_Primary_Contact__c, AccountId
-                FROM Contact
-                WHERE Is_Primary_Contact__c = TRUE AND AccountId IN :accIds
-            ];
+            List<Contact> oldContact = findOldContacts(accIds, true);
             for (Contact c : oldContact) {
                 primaryContacts.put(c.AccountId, c);
             }
@@ -48,6 +44,29 @@ public with sharing class ContactTriggerHandler {
             }
         } catch (Exception e) {
             System.debug('Error: ' + e);
+        }
+    }
+    /******************************************************************************
+     * @Name         : findOldContacts
+     * @Description  : Function that Finds Old Contacts
+     * @Created By   : CagriKilic
+     * @Created Date : Jan 11, 2023
+     * @Param accIds    : List<Id> - Account Id list
+     * @Param isPrimary : Boolean - Value of Is_Primary_Contact__c
+     *****************************************************************************/
+    private static List<Contact> findOldContacts(List<Id> accIds, Boolean isPrimary) {
+        try {
+            List<Contact> oldContact = [
+                SELECT Id, Name, Is_Primary_Contact__c, AccountId
+                FROM Contact
+                WHERE
+                    Is_Primary_Contact__c = :isPrimary
+                    AND AccountId IN :accIds
+            ];
+            return oldContact;
+        } catch (Exception e) {
+            System.debug('Error: ' + e);
+            return new List<Contact>();
         }
     }
     /******************************************************************************
@@ -99,11 +118,7 @@ public with sharing class ContactTriggerHandler {
                 primaryContacts.put(c.AccountId, c);
             }
 
-            List<Contact> oldContact = [
-                SELECT Id, Name, Is_Primary_Contact__c, AccountId
-                FROM Contact
-                WHERE Is_Primary_Contact__c = FALSE AND AccountId = :accIds
-            ];
+            List<Contact> oldContact = findOldContacts(accIds, false);
             for (Contact c : oldContact) {
                 if (primaryContacts.containsKey(c.AccountId)) {
                     c.Primary_Contact_Phone__c = primaryContacts.get(c.AccountId).Phone;
@@ -134,20 +149,13 @@ public with sharing class ContactTriggerHandler {
             List<Contact> newPrimaryContacts = new List<Contact>();
             List<Id> accIds = new List<Id>();
             for (Contact c : con) {
-                if (
-                    c.Is_Primary_Contact__c &&
-                    !conOldMap.get(c.Id).Is_Primary_Contact__c
-                ) {
+                if (c.Is_Primary_Contact__c && !conOldMap.get(c.Id).Is_Primary_Contact__c) {
                     accIds.add(c.AccountId);
                     newPrimaryContacts.add(c);
                 }
             }
             if (!accIds.isEmpty()) {
-                List<Contact> oldContact = [
-                    SELECT Id, Name, Is_Primary_Contact__c, AccountId
-                    FROM Contact
-                    WHERE Is_Primary_Contact__c = TRUE AND AccountId IN :accIds
-                ];
+                List<Contact> oldContact = findOldContacts(accIds, true);
                 for (Contact c : oldContact) {
                     primaryContacts.put(c.AccountId, c);
                 }
