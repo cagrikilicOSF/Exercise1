@@ -11,8 +11,7 @@
  ******************************************************************/
 public without sharing class EmailToPrimaryContactBatch implements Database.Batchable<sObject>, Database.Stateful {
     private Integer sentEmails = 0;
-    private List<Contact> primaryContacts;
-    private Map<Id, Decimal[]> opportunityAmounts;
+    private Map<Id, Map<String, Decimal>> opportunityAmounts;
     /******************************************************************
   	* @Name         : start 
   	* @Description  : Returns the result of the sent query
@@ -42,25 +41,27 @@ public without sharing class EmailToPrimaryContactBatch implements Database.Batc
   	******************************************************************/
     public void execute(Database.BatchableContext bc, List<Opportunity> opps) {
         try {
-            opportunityAmounts = new Map<Id, Decimal[]>();
-            primaryContacts = [
-                SELECT Id, Email, Account.Name, AccountId
-                FROM Contact
-                WHERE Is_Primary_Contact__c = TRUE
-            ];
-
-            for (Contact c : primaryContacts) {
-                opportunityAmounts.put(c.AccountId, new List<Decimal>{ 0, 0, 0 });
-                for (Opportunity o : opps) {
-                    if (o.AccountId == c.AccountId) {
-                        if (o.StageName == 'Closed Won') {
-                            opportunityAmounts.get(c.AccountId)[1] += o.Amount; // sumClosedWonAmounts
-                        } else if (o.StageName == 'Closed Lost') {
-                            opportunityAmounts.get(c.AccountId)[2] += o.Amount; // sumClosedLostAmounts
-                        } else {
-                            opportunityAmounts.get(c.AccountId)[0] += o.Amount; // sumOpenAmounts
+            opportunityAmounts = new Map<Id, Map<String, Decimal>>();
+            String stageName;
+            for (Opportunity o : opps) {
+                if (o.StageName != 'Closed Lost' && o.StageName != 'Closed Won') {
+                    stageName = 'Open';
+                } else {
+                    stageName = o.StageName;
+                }
+                if (opportunityAmounts.containsKey(o.AccountId)) {
+                    opportunityAmounts.get(o.AccountId)
+                        .put(stageName, opportunityAmounts.get(o.AccountId).get(stageName) + o.Amount);
+                } else {
+                    opportunityAmounts.put(o.AccountId,
+                        new Map<String, Decimal>{
+                            'Open' => 0,
+                            'Closed Lost' => 0,
+                            'Closed Won' => 0
                         }
-                    }
+                    );
+                    opportunityAmounts.get(o.AccountId)
+                        .put(stageName, opportunityAmounts.get(o.AccountId).get(stageName) + o.Amount);
                 }
             }
         } catch (Exception e) {
@@ -69,7 +70,7 @@ public without sharing class EmailToPrimaryContactBatch implements Database.Batc
     }
     /******************************************************************
   	* @Name         : finish 
-  	* @Description  : Sends email to primary contacts
+  	* @Description  : Finds primary contacts and shows job result
   	* @Created By   : CagriKilic
   	* @Created Date : Jan 12, 2023
     * @Param bc     : Database.BatchableContext - Batchable Context 
@@ -77,56 +78,13 @@ public without sharing class EmailToPrimaryContactBatch implements Database.Batc
   	******************************************************************/
     public void finish(Database.BatchableContext bc) {
         try {
-            Messaging.SingleEmailMessage[] messages = new List<Messaging.SingleEmailMessage>();
-            for (Contact c : primaryContacts) {
-                Messaging.SingleEmailMessage message = new Messaging.SingleEmailMessage();
-                message.setTargetObjectId(c.Id);
-                message.setSenderDisplayName('Company Support');
-                message.setReplyTo('no-reply@company.com');
-                message.setUseSignature(false);
-                message.setBccSender(false);
-                message.setSaveAsActivity(false);
-                EmailTemplate emailTemplate = [
-                    SELECT
-                        Id,
-                        Subject,
-                        Description,
-                        HtmlValue,
-                        DeveloperName,
-                        Body
-                    FROM EmailTemplate
-                    WHERE Name = 'emailTemplate'
-                ];
-                emailTemplate.Body = emailTemplate.body.replace(
-                    '{!Account.Name}',
-                    c.Account.Name
-                );
-                emailTemplate.Body = emailTemplate.body.replace(
-                    'OpenAmount',
-                    String.valueOf(opportunityAmounts.get(c.AccountId)[0])
-                );
-                emailTemplate.Body = emailTemplate.body.replace(
-                    'ClosedWonAmount',
-                    String.valueOf(opportunityAmounts.get(c.AccountId)[1])
-                );
-                emailTemplate.Body = emailTemplate.body.replace(
-                    'ClosedLostAmount',
-                    String.valueOf(opportunityAmounts.get(c.AccountId)[2])
-                );
-                message.setTemplateID(emailTemplate.Id);
-                message.setWhatId(c.AccountId);
-                message.setHtmlBody(emailTemplate.Body);
-                message.toAddresses = new List<String>{ c.Email };
-                messages.add(message);
-                sentEmails++;
-            }
-            Messaging.SendEmailResult[] results = Messaging.sendEmail(messages);
-            if (results[0].success) {
-                System.debug('The email was sent successfully.');
-            } else {
-                System.debug('The email failed to send: ' + results[0].errors[0].message);
-            }
-
+            Set<Id> accIds = new Set<Id>(opportunityAmounts.keySet());
+            List<Contact> primaryContacts = [
+                SELECT Id, Email, Account.Name, AccountId
+                FROM Contact
+                WHERE Is_Primary_Contact__c = TRUE AND AccountId IN :accIds
+            ];
+            sentMesssages(primaryContacts);
             AsyncApexJob job = [
                 SELECT
                     Id,
@@ -140,6 +98,62 @@ public without sharing class EmailToPrimaryContactBatch implements Database.Batc
             ];
             System.debug(sentEmails + ' Emails sent. Shazam!');
             System.debug('Job: ' + job);
+        } catch (Exception e) {
+            System.debug('Error: ' + e);
+        }
+    }
+
+    /******************************************************************
+  	* @Name         : sentMesssages 
+  	* @Description  : Sends email to primary contacts
+  	* @Created By   : CagriKilic
+  	* @Created Date : Jan 13, 2023
+    * @Param bc     : List<Contact> - List of contacts
+    
+  	******************************************************************/
+    private void sentMesssages(List<Contact> cList) {
+        try {
+            Messaging.SingleEmailMessage[] messages = new List<Messaging.SingleEmailMessage>();
+            EmailTemplate emailTemplate = [
+                SELECT Id, Subject, Description, HtmlValue, DeveloperName, Body
+                FROM EmailTemplate
+                WHERE Name = 'emailTemplate'
+            ];
+            for (Contact c : cList) {
+                String body = emailTemplate.body;
+                Messaging.SingleEmailMessage message = new Messaging.SingleEmailMessage();
+                message.setTargetObjectId(c.Id);
+                message.setSenderDisplayName('Company Support');
+                message.setReplyTo('no-reply@company.com');
+                message.setUseSignature(false);
+                message.setBccSender(false);
+                message.setSaveAsActivity(false);
+                body = body.replace('{!Account.Name}', c.Account.Name);
+                body = body.replace(
+                    'OpenAmount',
+                    String.valueOf(opportunityAmounts.get(c.AccountId).get('Open'))
+                );
+                body = body.replace(
+                    'ClosedWonAmount',
+                    String.valueOf(opportunityAmounts.get(c.AccountId).get('Closed Won'))
+                );
+                body = body.replace(
+                    'ClosedLostAmount',
+                    String.valueOf(opportunityAmounts.get(c.AccountId).get('Closed Lost'))
+                );
+                message.setTemplateID(emailTemplate.Id);
+                message.setWhatId(c.AccountId);
+                message.setHtmlBody(body);
+                message.toAddresses = new List<String>{ c.Email };
+                messages.add(message);
+                sentEmails++;
+            }
+            Messaging.SendEmailResult[] results = Messaging.sendEmail(messages);
+            if (results[0].success) {
+                System.debug('The email was sent successfully.');
+            } else {
+                System.debug('The email failed to send: ' + results[0].errors[0].message);
+            }
         } catch (Exception e) {
             System.debug('Error: ' + e);
         }
