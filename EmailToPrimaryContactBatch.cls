@@ -12,6 +12,9 @@
 public without sharing class EmailToPrimaryContactBatch implements Database.Batchable<sObject>, Database.Stateful {
     private Integer sentEmails = 0;
     private Map<Id, Map<String, Decimal>> opportunityAmounts;
+    private static final String STAGE_OPEN = 'Open';
+    private static final String STAGE_CLOSED_WON = 'Closed Won';
+    private static final String STAGE_CLOSED_LOST = 'Closed Lost';
     /******************************************************************
   	* @Name         : start 
   	* @Description  : Returns the result of the sent query
@@ -23,7 +26,7 @@ public without sharing class EmailToPrimaryContactBatch implements Database.Batc
   	******************************************************************/
     public Database.QueryLocator start(Database.BatchableContext bc) {
         try {
-            String query = 'SELECT StageName, Amount, AccountId FROM Opportunity';
+            String query = 'SELECT StageName, Amount, AccountId FROM Opportunity WHERE LastModifiedDate = THIS_MONTH';
             return Database.getQueryLocator(query);
         } catch (QueryException e) {
             System.debug('An error occurred: ' + e.getMessage());
@@ -44,8 +47,8 @@ public without sharing class EmailToPrimaryContactBatch implements Database.Batc
             opportunityAmounts = new Map<Id, Map<String, Decimal>>();
             String stageName;
             for (Opportunity o : opps) {
-                if (o.StageName != 'Closed Lost' && o.StageName != 'Closed Won') {
-                    stageName = 'Open';
+                if (o.StageName != STAGE_CLOSED_LOST && o.StageName != STAGE_CLOSED_WON) {
+                    stageName = STAGE_OPEN;
                 } else {
                     stageName = o.StageName;
                 }
@@ -55,9 +58,9 @@ public without sharing class EmailToPrimaryContactBatch implements Database.Batc
                 } else {
                     opportunityAmounts.put(o.AccountId,
                         new Map<String, Decimal>{
-                            'Open' => 0,
-                            'Closed Lost' => 0,
-                            'Closed Won' => 0
+                            STAGE_OPEN => 0,
+                            STAGE_CLOSED_LOST => 0,
+                            STAGE_CLOSED_WON => 0
                         }
                     );
                     opportunityAmounts.get(o.AccountId)
