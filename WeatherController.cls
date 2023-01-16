@@ -34,29 +34,29 @@ public with sharing class WeatherController {
 
   	******************************************************************/
     private void fetchWeatherInfo() {
-        String APIKey = '3e6dc3c440ec8593b831072f36667c5d';
-        String endPoint =
-            'https://api.openweathermap.org/data/2.5/weather?q=' +
-            city +
-            '&units=metric&appid=' +
-            APIKey;
-        HttpRequest request = new HttpRequest();
-        HttpResponse response = new HttpResponse();
-        Http http = new Http();
-        request.setEndpoint(endPoint);
-        request.setMethod('GET');
-        response = http.send(request);
-        if (response.getStatusCode() == 200) {
-            String jsonResponse = response.getBody();
-            FromJSON jsonParseData = (FromJSON) parse(jsonResponse);
-            wrpData = new WrapperData(jsonParseData);
-        } else {
-            ApexPages.addmessage(
-                new ApexPages.message(
-                    ApexPages.severity.ERROR,
-                    HTTP_RESPONSE_ERROR
-                )
-            );
+        try {
+            List<openweatherendpoint__c> endPointDatas = openweatherendpoint__c.getAll().values();
+            String endPoint=endPointDatas.get(1).Endpoint_URL__c + city + endPointDatas.get(0).Endpoint_URL__c;
+            HttpRequest request = new HttpRequest();
+            HttpResponse response = new HttpResponse();
+            Http http = new Http();
+            request.setEndpoint(endPoint);
+            request.setMethod('GET');
+            response = http.send(request);
+            if (response.getStatusCode() == 200) {
+                String jsonResponse = response.getBody();
+                FromJSON jsonParseData = (FromJSON) parse(jsonResponse);
+                wrpData = new WrapperData(jsonParseData);
+            } else {
+                ApexPages.addmessage(
+                    new ApexPages.message(
+                        ApexPages.severity.ERROR,
+                        HTTP_RESPONSE_ERROR
+                    )
+                );
+            }
+        } catch (Exception e) {
+            System.debug('Error: ' + e);
         }
     }
     /******************************************************************
