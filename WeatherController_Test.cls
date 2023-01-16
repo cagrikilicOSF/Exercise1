@@ -25,7 +25,7 @@ public with sharing class WeatherController_Test {
         List<openweatherendpoint__c> cSettings = new List<openweatherendpoint__c>();
         for (Integer i = 0; i < 2; i++) {
             openweatherendpoint__c customSetting = new openweatherendpoint__c();
-            if (i == 0) {
+            if (i == 1) {
                 customSetting.Name = 'endpointpart1';
                 customSetting.Endpoint_URL__c = 'https://api.openweathermap.org/data/2.5/weather?q=';
             } else {
@@ -39,10 +39,10 @@ public with sharing class WeatherController_Test {
     /**
      * @author Cagri Kilic
      * @date Jan 16, 2023
-     * @description Test function of WeatherController class
+     * @description Positive test function of WeatherController class
      */
     @isTest
-    static void weatherControllerTest() {
+    static void weatherControllerPositiveTest() {
         createTestData();
         Test.startTest();
         Test.setMock(HTTPCalloutMock.class, new WeatherConditionsMock());
@@ -54,5 +54,22 @@ public with sharing class WeatherController_Test {
         System.assert(testController.wrpData.description != null);
         System.assert(testController.wrpData.temp != null);
         System.assert(testController.wrpData.icon != null);
+    }
+    /**
+     * @author Cagri Kilic
+     * @date Jan 16, 2023
+     * @description Negative test function of WeatherController class
+     */
+    @isTest
+    static void weatherControllerNegativeTest() {
+        createTestData();
+        Test.startTest();
+        Test.setMock(HTTPCalloutMock.class, new WeatherConditionsNegativeMock());
+        Apexpages.StandardController stdController = new Apexpages.StandardController(
+            testAccount
+        );
+        WeatherController testController = new WeatherController(stdController);
+        Test.stopTest();
+        System.assert(testController.wrpData == null);
     }
 }
